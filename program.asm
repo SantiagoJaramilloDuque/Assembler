@@ -56,9 +56,8 @@ main:
 
     # ---- Saltos (tipo J e I) ----
     jal x1, etiqueta
-    jalr x0, 0(x1)       # salto indirecto
+    jalr x0, x1, 0       # salto indirecto
     j etiqueta          # pseudo: jal x0, etiqueta
-    call etiqueta       # pseudo: jal ra, etiqueta
     ret                 # pseudo: jalr x0, ra, 0
 
 etiqueta:

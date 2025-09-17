@@ -8,9 +8,15 @@ y la expansión de pseudo-instrucciones.
 """
 import re
 from typing import List, Dict, Tuple, Union
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 # Importa todas las definiciones de la arquitectura desde el módulo local.
 from definiciones_riscv import *
+
+
+console = Console()
 
 class Ensamblador:
     def __init__(self):
@@ -64,16 +70,17 @@ class Ensamblador:
                 self.direccion_actual += len(inst_expandidas) * 4
 
     def segunda_pasada(self, lineas_codigo: List[str]) -> bool:
-        """Genera el código máquina usando la tabla de símbolos."""
+        """Genera el código máquina usando la tabla de símbolos con validación robusta."""
         self.direccion_actual = 0
         self.segmento_actual = ".text"
+        errores = 0
+
         for num_linea, linea in enumerate(lineas_codigo, 1):
             linea_original = linea.strip()
             linea = linea.split('#')[0].strip()
             if not linea:
                 continue
 
-            # Manejo de directivas
             if linea.startswith('.'):
                 if linea.startswith('.text'):
                     self.segmento_actual = ".text"
@@ -83,14 +90,12 @@ class Ensamblador:
                     self.direccion_actual = 0x10000000
                 continue
 
-            # Procesar etiquetas
             match = re.match(r'(\w+):', linea)
             if match:
                 linea = linea[len(match.group(0)):].strip()
             if not linea:
                 continue
 
-            # Solo ensamblamos instrucciones en .text
             if self.segmento_actual != ".text":
                 continue
 
@@ -99,17 +104,52 @@ class Ensamblador:
             operandos = [op.strip() for op in partes[1].split(',')] if len(partes) > 1 else []
 
             try:
+                # 1. Validar que el mnemónico exista o sea pseudoinstrucción
+                if mnemonico not in MNEMONICO_A_FORMATO and not self._es_pseudo(mnemonico):
+                    raise ValueError(f"Instrucción no soportada: '{mnemonico}'")
+
                 inst_expandidas = self._expandir_pseudo_instrucciones(mnemonico, operandos)
+
                 for mnem, ops in inst_expandidas:
-                    if mnem not in MNEMONICO_A_FORMATO:
-                        raise ValueError(f"Instrucción no soportada en RV32I: {mnem}")
+                    self._validar_operandos(mnem, ops, num_linea, linea_original)  # <--- validación aquí
                     codigo_maquina = self.ensamblar_instruccion(mnem, ops, self.direccion_actual)
                     self.segmento_texto.extend(codigo_maquina)
                     self.direccion_actual += 4
-            except (ValueError, IndexError) as e:
-                print(f"Error en la línea {num_linea}: '{linea_original}'\n  -> {e}")
-                return False
-        return True
+
+            except ValueError as e:
+                errores += 1
+                texto_error = Text(f"Error en la línea {num_linea}: {e}", style="bold red")
+                console.print(Panel(texto_error, title=f"[red]Línea {num_linea}[/red]"))
+                console.print(f"[yellow]{linea_original}[/yellow]")
+
+        return errores == 0
+
+    def _es_pseudo(self, mnem: str) -> bool:
+        """Devuelve True si es una pseudoinstrucción conocida."""
+        pseudos = ['nop', 'mv', 'not', 'neg', 'j', 'jal', 'ret', 'call',
+                   'seqz', 'snez', 'sltz', 'sgtz', 'jr', 'li']
+        return mnem in pseudos
+
+    def _validar_operandos(self, mnem: str, ops: List[str], num_linea: int, linea_original: str):
+        """Valida número y tipo de operandos e inmediatos en rango."""
+        # Número de operandos esperado
+        esperado = {
+            "addi": 3, "xori": 3, "ori": 3, "andi": 3, "slli": 3, "srli": 3, "srai": 3,
+            "slti": 3, "sltiu": 3, "lw": 2, "sw": 2, "beq": 3, "bne": 3, "jal": 2,
+            "jalr": 3, "ecall": 0, "ebreak": 0
+        }
+        if mnem in esperado and len(ops) != esperado[mnem]:
+            raise ValueError(f"'{mnem}' espera {esperado[mnem]} operandos, se dieron {len(ops)}.")
+        
+
+        # Validar inmediatos (ejemplo para addi)
+        if mnem == "addi":
+            try:
+                inmediato = int(ops[2], 0)
+                if not -2048 <= inmediato <= 2047:
+                    raise ValueError(f"Immediate fuera de rango para '{mnem}' (-2048..2047): {ops[2]}")
+            except ValueError:
+                raise ValueError(f"El inmediato '{ops[2]}' no es un número válido.")
 
     def ensamblar_instruccion(self, mnemonico: str, operandos: List[str], pc_actual: int) -> bytes:
         """Despacha al método de ensamblado correcto según el formato."""
