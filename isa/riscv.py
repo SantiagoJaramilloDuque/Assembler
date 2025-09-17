@@ -1,7 +1,6 @@
+# isa/riscv.py
 # -*- coding: utf-8 -*-
 """
-definiciones_riscv.py
-
 Contiene las definiciones estáticas de la arquitectura RISC-V (RV32I),
 incluyendo formatos de instrucción, opcodes, códigos de función y nombres de registros.
 """
@@ -11,8 +10,8 @@ from typing import List, Dict
 FORMATOS_INSTRUCCION: Dict[str, List[str]] = {
     'R': ["add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and"],
     'I': ["addi", "slli", "slti", "sltiu", "xori", "srli", "srai", "ori", "andi",
-        "jalr", "lb", "lh", "lw", "lbu", "lhu",
-        "fence", "ecall", "ebreak"],
+          "jalr", "lb", "lh", "lw", "lbu", "lhu",
+          "fence", "ecall", "ebreak"],
     'S': ["sb", "sh", "sw"],
     'B': ["beq", "bne", "blt", "bge", "bltu", "bgeu"],
     'U': ["lui", "auipc"],
@@ -27,18 +26,18 @@ MNEMONICO_A_FORMATO: Dict[str, str] = {
 # Códigos de operación (opcodes) para cada formato.
 OPCODE: Dict[str, int] = {
     'R': 0b0110011,
-    'I': 0b0010011,
-    'L': 0b0000011,
-    'S': 0b0100011,
-    'B': 0b1100011,
-    'J': 0b1101111,
-    'U': 0b0110111,
+    'I': 0b0010011,  # Para operaciones con inmediato
+    'L': 0b0000011,  # Para cargas (load)
+    'S': 0b0100011,  # Para almacenamientos (store)
+    'B': 0b1100011,  # Para saltos condicionales (branch)
+    'J': 0b1101111,  # Para jal
+    'U': 0b0110111,  # Para lui
     'auipc': 0b0010111,
     'jalr': 0b1100111,
-    'SYSTEM': 0b1110011  # ecall y ebreak
+    'SYSTEM': 0b1110011
 }
 
-# Códigos de función de 3 bits (func3) - solo RV32I
+# Códigos de función de 3 bits (func3)
 FUNC3: Dict[str, int] = {
     "add": 0b000, "sub": 0b000, "sll": 0b001, "slt": 0b010, "sltu": 0b011, "xor": 0b100,
     "srl": 0b101, "sra": 0b101, "or": 0b110, "and": 0b111,

@@ -1,20 +1,20 @@
+# main.py
 # -*- coding: utf-8 -*-
 """
-ensamblador.py
-
 Punto de entrada principal para el ensamblador RISC-V.
 Este script maneja la lectura del archivo de entrada, la escritura de los
-archivos de salida y orquesta el proceso de ensamblado utilizando la clase Ensamblador.
+archivos de salida y orquesta el proceso de ensamblado.
 """
-from nucleo_ensamblador import Ensamblador
+from core.ensamblador import Ensamblador
+from utils.file_writer import escribir_archivos_salida
+import os
 
 def principal() -> None:
     """
-    Función principal que orquesta el proceso de ensamblado.
+    Función principal que orquesta todo el proceso de ensamblado.
     """
     archivo_entrada = "program.asm"
-    archivo_salida_hex = "program.hex"
-    archivo_salida_bin = "program.bin"
+    nombre_base_salida = os.path.splitext(archivo_entrada)[0]
 
     print(f"Iniciando ensamblaje de '{archivo_entrada}'...")
 
@@ -28,31 +28,12 @@ def principal() -> None:
     # 1. Crear una instancia del ensamblador.
     ensamblador = Ensamblador()
     
-    # 2. Realizar la primera pasada.
-    print("Realizando primera pasada (construcción de tabla de símbolos)...")
-    ensamblador.primera_pasada(lineas_codigo)
+    # 2. Ejecutar el proceso de ensamblado.
+    codigo_maquina = ensamblador.ensamblar(lineas_codigo)
     
-    # 3. Realizar la segunda pasada.
-    print("Realizando segunda pasada (generación de código máquina)...")
-    if not ensamblador.segunda_pasada(lineas_codigo):
-        print("\nEl ensamblaje falló debido a errores.")
-        return
-        
-    # 4. Escribir los resultados en los archivos de salida.
-    try:
-        with open(archivo_salida_hex, 'w') as f_hex, open(archivo_salida_bin, 'w') as f_bin:
-            for i in range(0, len(ensamblador.segmento_texto), 4):
-                palabra_bytes = ensamblador.segmento_texto[i:i+4]
-                palabra_entero = int.from_bytes(palabra_bytes, byteorder='little')
-                
-                f_hex.write(f"{palabra_entero:08X}\n")
-                f_bin.write(f"{palabra_entero:032b}\n")
-        
-        print(f"\n¡Ensamblaje completado exitosamente!")
-        print(f"Salida generada en '{archivo_salida_hex}' y '{archivo_salida_bin}'.\n")
-
-    except IOError as e:
-        print(f"Error al escribir los archivos de salida: {e}")
+    # 3. Si el ensamblado fue exitoso, escribir los archivos de salida.
+    if codigo_maquina:
+        escribir_archivos_salida(nombre_base_salida, codigo_maquina)
 
 if __name__ == "__main__":
     principal()
