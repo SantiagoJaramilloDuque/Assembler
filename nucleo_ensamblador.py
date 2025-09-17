@@ -13,15 +13,12 @@ from typing import List, Dict, Tuple, Union
 from definiciones_riscv import *
 
 class Ensamblador:
-    """
-    Clase que encapsula la lógica de un ensamblador de dos pasadas para RV32I.
-    """
     def __init__(self):
         self.tabla_de_simbolos: Dict[str, int] = {}
         self.segmento_texto: bytearray = bytearray()
         self.direccion_actual: int = 0
+        self.segmento_actual: str = ".text"  # Por defecto empieza en .text
         
-        # Diccionario despachador para llamar a la función de ensamblado correcta.
         self.manejadores_formato = {
             'R': self._ensamblar_tipo_R,
             'I': self._ensamblar_tipo_I,
@@ -32,13 +29,25 @@ class Ensamblador:
         }
 
     def primera_pasada(self, lineas_codigo: List[str]) -> None:
-        """Construye la tabla de símbolos."""
+        """Construye la tabla de símbolos recorriendo el código."""
         self.direccion_actual = 0
+        self.segmento_actual = ".text"
         for linea in lineas_codigo:
             linea = linea.split('#')[0].strip()
             if not linea:
                 continue
 
+            # Manejo de directivas
+            if linea.startswith('.'):
+                if linea.startswith('.text'):
+                    self.segmento_actual = ".text"
+                    self.direccion_actual = 0x00000000
+                elif linea.startswith('.data'):
+                    self.segmento_actual = ".data"
+                    self.direccion_actual = 0x10000000  # inicio del segmento de datos
+                continue
+
+            # Manejo de etiquetas
             match = re.match(r'(\w+):', linea)
             if match:
                 self.tabla_de_simbolos[match.group(1)] = self.direccion_actual
@@ -46,26 +55,43 @@ class Ensamblador:
             if not linea:
                 continue
 
-            partes = linea.split(maxsplit=1)
-            mnemonico = partes[0].lower()
-            if mnemonico.startswith('.'):
-                continue
-
-            operandos = [op.strip() for op in partes[1].split(',')] if len(partes) > 1 else []
-            inst_expandidas = self._expandir_pseudo_instrucciones(mnemonico, operandos)
-            self.direccion_actual += len(inst_expandidas) * 4
+            # Solo contamos instrucciones en .text
+            if self.segmento_actual == ".text":
+                partes = linea.split(maxsplit=1)
+                mnemonico = partes[0].lower()
+                operandos = [op.strip() for op in partes[1].split(',')] if len(partes) > 1 else []
+                inst_expandidas = self._expandir_pseudo_instrucciones(mnemonico, operandos)
+                self.direccion_actual += len(inst_expandidas) * 4
 
     def segunda_pasada(self, lineas_codigo: List[str]) -> bool:
-        """Genera el código máquina."""
+        """Genera el código máquina usando la tabla de símbolos."""
         self.direccion_actual = 0
+        self.segmento_actual = ".text"
         for num_linea, linea in enumerate(lineas_codigo, 1):
             linea_original = linea.strip()
             linea = linea.split('#')[0].strip()
+            if not linea:
+                continue
 
+            # Manejo de directivas
+            if linea.startswith('.'):
+                if linea.startswith('.text'):
+                    self.segmento_actual = ".text"
+                    self.direccion_actual = 0x00000000
+                elif linea.startswith('.data'):
+                    self.segmento_actual = ".data"
+                    self.direccion_actual = 0x10000000
+                continue
+
+            # Procesar etiquetas
             match = re.match(r'(\w+):', linea)
             if match:
                 linea = linea[len(match.group(0)):].strip()
-            if not linea or linea.startswith('.'):
+            if not linea:
+                continue
+
+            # Solo ensamblamos instrucciones en .text
+            if self.segmento_actual != ".text":
                 continue
 
             partes = linea.split(maxsplit=1)
@@ -75,7 +101,6 @@ class Ensamblador:
             try:
                 inst_expandidas = self._expandir_pseudo_instrucciones(mnemonico, operandos)
                 for mnem, ops in inst_expandidas:
-                    # Si el mnemónico no existe en RV32I, lanza error
                     if mnem not in MNEMONICO_A_FORMATO:
                         raise ValueError(f"Instrucción no soportada en RV32I: {mnem}")
                     codigo_maquina = self.ensamblar_instruccion(mnem, ops, self.direccion_actual)
@@ -253,6 +278,6 @@ class Ensamblador:
             if mnem in ['blez', 'bgtz']:
                 rs1, rs2 = rs2, rs1
             return [(mapa_saltos[mnem], [rs1, rs2, etiqueta])]
-    
+
         return [(mnem, ops)]
 
