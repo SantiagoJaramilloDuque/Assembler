@@ -45,7 +45,7 @@ def principal() -> None:
                 palabra_bytes = ensamblador.segmento_texto[i:i+4]
                 palabra_entero = int.from_bytes(palabra_bytes, byteorder='little')
                 
-                f_hex.write(f"{palabra_entero:08x}\n")
+                f_hex.write(f"{palabra_entero:08X}\n")
                 f_bin.write(f"{palabra_entero:032b}\n")
         
         print(f"\n¡Ensamblaje completado exitosamente!")

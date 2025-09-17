@@ -190,6 +190,8 @@ class Ensamblador:
                 raise ValueError(f"Símbolo no definido: '{simbolo}'")
 
     def _expandir_pseudo_instrucciones(self, mnem: str, ops: List[str]) -> List[Tuple[str, List[str]]]:
+
+        # --- ya existentes ---
         if mnem == 'nop':
             return [('addi', ['x0', 'x0', '0'])]
         if mnem == 'mv':
@@ -206,7 +208,24 @@ class Ensamblador:
             return [('jalr', ['x0', 'ra', '0'])]
         if mnem == 'call':
             etiqueta = ops[0]
-            return [('auipc', ['ra', f'%hi({etiqueta})']), ('jalr', ['ra', f'%lo({etiqueta})(ra)'])]
+            return [('auipc', ['ra', f'%hi({etiqueta})']),
+                    ('jalr', ['ra', f'%lo({etiqueta})(ra)'])]
+
+        # --- nuevas ---
+        if mnem == 'seqz':
+            return [('sltiu', [ops[0], ops[1], '1'])]
+        if mnem == 'snez':
+            return [('sltu', [ops[0], 'x0', ops[1]])]
+        if mnem == 'sltz':
+            return [('slt', [ops[0], ops[1], 'x0'])]
+        if mnem == 'sgtz':
+            return [('slt', [ops[0], 'x0', ops[1]])]
+        if mnem == 'jr':
+            return [('jalr', ['x0', ops[0], '0'])]
+        if mnem == 'jalr' and len(ops) == 1:
+            return [('jalr', ['ra', ops[0], '0'])]
+
+        # li ya estaba en tu código
         if mnem == 'li':
             rd, inmediato_str = ops
             try:
@@ -219,12 +238,21 @@ class Ensamblador:
                     inst.append(('addi', [rd, rd, str(baja)]))
                 return inst
             except ValueError:
-                return [('auipc', [rd, f'%hi({inmediato_str})']), ('addi', [rd, rd, f'%lo({inmediato_str})'])]
-        mapa_saltos = {'beqz': 'beq', 'bnez': 'bne', 'bltz': 'blt', 'bgez': 'bge', 'blez': 'bge', 'bgtz': 'blt'}
+                return [('auipc', [rd, f'%hi({inmediato_str})']),
+                        ('addi', [rd, rd, f'%lo({inmediato_str})'])]
+
+        # Saltos condicionales ya mapeados
+        mapa_saltos = {
+            'beqz': 'beq', 'bnez': 'bne',
+            'bltz': 'blt', 'bgez': 'bge',
+            'blez': 'bge', 'bgtz': 'blt'
+        }
         if mnem in mapa_saltos:
             rs1, etiqueta = ops
             rs2 = 'x0'
             if mnem in ['blez', 'bgtz']:
                 rs1, rs2 = rs2, rs1
             return [(mapa_saltos[mnem], [rs1, rs2, etiqueta])]
+    
         return [(mnem, ops)]
+
