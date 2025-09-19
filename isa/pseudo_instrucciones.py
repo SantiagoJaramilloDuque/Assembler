@@ -60,6 +60,11 @@ def expandir(mnemonico: str, operandos: List[str]) -> List[Tuple[str, List[str]]
     # Carga de inmediatos (li)
     if mnemonico == 'li':
         rd, inmediato_str = operandos
+        
+        # Validar que el inmediato no esté vacío
+        if not inmediato_str or inmediato_str.strip() == '':
+            raise ValueError(f"La pseudo-instrucción 'li' requiere un valor inmediato o etiqueta válida")
+        
         try:
             inmediato = int(inmediato_str, 0)
             if -2048 <= inmediato < 2048:
@@ -72,7 +77,10 @@ def expandir(mnemonico: str, operandos: List[str]) -> List[Tuple[str, List[str]]
                 instrucciones.append(('addi', [rd, rd, str(baja)]))
             return instrucciones
         except ValueError:
-            # El "inmediato" es en realidad una etiqueta
+            # Si no es un número válido, verificar que sea una etiqueta válida
+            if not inmediato_str.strip() or not inmediato_str.replace('_', '').isalnum():
+                raise ValueError(f"Valor inmediato o etiqueta inválida: '{inmediato_str}'")
+            # El "inmediato" es en realidad una etiqueta válida
             return [('auipc', [rd, f'%hi({inmediato_str})']),
                     ('addi', [rd, rd, f'%lo({inmediato_str})'])]
 
