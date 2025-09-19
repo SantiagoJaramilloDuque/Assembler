@@ -46,8 +46,8 @@ class Ensamblador:
         self.direccion_actual = 0
         self.segmento_actual = ".text"
 
-        for linea in lineas_codigo:
-            linea = linea.split('#')[0].strip()
+        for num_linea, linea_original in enumerate(lineas_codigo, 1):
+            linea = linea_original.split('#')[0].strip()
             if not linea:
                 continue
 
@@ -77,8 +77,11 @@ class Ensamblador:
             mnemonico = partes[0].lower()
             operandos = [op.strip() for op in partes[1].split(',')] if len(partes) > 1 else []
             
-            inst_expandidas = pseudo_instrucciones.expandir(mnemonico, operandos)
-            self.direccion_actual += len(inst_expandidas) * 4
+            try:
+                inst_expandidas = pseudo_instrucciones.expandir(mnemonico, operandos)
+                self.direccion_actual += len(inst_expandidas) * 4
+            except ValueError as e:
+                self.manejador_errores.reportar(num_linea, str(e), linea_original)
 
     def _segunda_pasada(self, lineas_codigo: List[str]) -> None:
         """Genera el código máquina usando la tabla de símbolos."""
