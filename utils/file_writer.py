@@ -1,10 +1,10 @@
-# utils/file_writer.py
-# -*- coding: utf-8 -*-
 """
 Utilidad para escribir el código máquina en archivos de salida con formato
 hexadecimal y binario.
 """
-def escribir_archivos_salida(nombre_base: str, segmento_texto: bytearray) -> None:
+import sys
+
+def escribir_archivos_salida(segmento_texto: bytearray) -> None:
     """
     Escribe el contenido del segmento de texto en archivos .hex y .bin.
     
@@ -12,8 +12,8 @@ def escribir_archivos_salida(nombre_base: str, segmento_texto: bytearray) -> Non
         nombre_base: El nombre base para los archivos de salida (ej. "program").
         segmento_texto: El bytearray que contiene el código máquina.
     """
-    archivo_salida_hex = f"{nombre_base}.hex"
-    archivo_salida_bin = f"{nombre_base}.bin"
+    archivo_salida_hex = sys.argv[2] 
+    archivo_salida_bin = sys.argv[3]
 
     print(f"Generando salida en '{archivo_salida_hex}' y '{archivo_salida_bin}'...")
 

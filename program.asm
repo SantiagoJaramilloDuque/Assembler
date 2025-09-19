@@ -3,7 +3,7 @@
 # Este programa suma números desde 1 hasta 10 y luego termina
 .text
     # Inicia el programa
-    li a0      # Carga el valor 10 en el registro a0 (pseudo-instrucción)
+    li a0, 2      # Carga el valor 10 en el registro a0 (pseudo-instrucción)
     li a1, 0        # Inicializa un contador en a1
     li a2, 1        # Valor a sumar en cada iteración
 
