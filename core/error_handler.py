@@ -1,5 +1,3 @@
-# core/error_handler.py
-# -*- coding: utf-8 -*-
 """
 Módulo para la gestión y visualización de errores durante el ensamblado.
 """
@@ -22,11 +20,11 @@ class ErrorHandler:
         panel_contenido = texto_error
         
         if linea_original:
-            panel_contenido.append(f"\n\n[yellow]En la línea:[/yellow] {linea_original.strip()}")
+            panel_contenido.append(f"\n\nEn la línea: {linea_original.strip()}")
 
         panel = Panel(
             panel_contenido,
-            title=f"[red]Error en la línea {num_linea}[/red]",
+            title=f"Error en la línea {num_linea}",
             border_style="red"
         )
         self._console.print(panel)

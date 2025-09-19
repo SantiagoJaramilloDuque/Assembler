@@ -1,5 +1,3 @@
-# isa/riscv.py
-# -*- coding: utf-8 -*-
 """
 Contiene las definiciones estáticas de la arquitectura RISC-V (RV32I),
 incluyendo formatos de instrucción, opcodes, códigos de función y nombres de registros.
@@ -10,8 +8,8 @@ from typing import List, Dict
 FORMATOS_INSTRUCCION: Dict[str, List[str]] = {
     'R': ["add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and"],
     'I': ["addi", "slli", "slti", "sltiu", "xori", "srli", "srai", "ori", "andi",
-          "jalr", "lb", "lh", "lw", "lbu", "lhu",
-          "fence", "ecall", "ebreak"],
+        "jalr", "lb", "lh", "lw", "lbu", "lhu",
+        "ecall", "ebreak"],
     'S': ["sb", "sh", "sw"],
     'B': ["beq", "bne", "blt", "bge", "bltu", "bgeu"],
     'U': ["lui", "auipc"],
@@ -47,13 +45,14 @@ FUNC3: Dict[str, int] = {
     "sb": 0b000, "sh": 0b001, "sw": 0b010,
     "beq": 0b000, "bne": 0b001, "blt": 0b100, "bge": 0b101,
     "bltu": 0b110, "bgeu": 0b111,
-    "jalr": 0b000, "fence": 0b000, "ecall": 0b000, "ebreak": 0b000
+    "jalr": 0b000, "ecall": 0b000, "ebreak": 0b000
 }
 
 # Códigos de función de 7 bits (func7). Solo los que no son cero.
 FUNC7: Dict[str, int] = {
     "sub": 0b0100000,
-    "sra": 0b0100000
+    "sra": 0b0100000,
+    "srai": 0b0100000
 }
 
 # Mapeo de nombres de registros (ABI) a sus números.

@@ -127,15 +127,21 @@ class Ensamblador:
 
     def _validar_operandos(self, mnem: str, ops: List[str]) -> None:
         """Validación más robusta del número y tipo de operandos."""
+        # Excepción para ecall y ebreak: no tienen operandos
+        if mnem in ['ecall', 'ebreak']:
+            if len(ops) != 0:
+                raise ValueError(f"'{mnem}' no espera operandos, pero se dieron {len(ops)}")
+            return  # No validar nada más
+
         formato = riscv.MNEMONICO_A_FORMATO.get(mnem)
         if not formato:
             raise ValueError(f"Mnemónico desconocido en la validación: '{mnem}'")
-        
+
         # Validar número de operandos
         num_ops_esperado = {'R': 3, 'I': 3, 'S': 2, 'B': 3, 'U': 2, 'J': 2}
         if formato in ['I'] and mnem in ['lw', 'lb', 'lh', 'lbu', 'lhu']:
             num_ops_esperado['I'] = 2
-        
+
         if formato in num_ops_esperado and len(ops) != num_ops_esperado[formato]:
             raise ValueError(f"'{mnem}' espera {num_ops_esperado[formato]} operandos, pero se dieron {len(ops)}")
 
@@ -147,9 +153,9 @@ class Ensamblador:
             if re.fullmatch(r'-?\d+', op) or op in self.tabla_de_simbolos or re.fullmatch(r'.*\(.*\)', op):
                 continue
             if not op.lower() in riscv.REGISTROS and not '%' in op: # Ignorar %hi/%lo
-                # Podría ser un registro mal escrito
                 if re.fullmatch(r'x\d{1,2}|[a-z]+\d?', op.lower()):
-                     raise ValueError(f"Registro no válido: '{op}'")
+                    raise ValueError(f"Registro no válido: '{op}'")
+
 
     def _ensamblar_instruccion(self, mnem: str, ops: List[str], pc_actual: int) -> bytes:
         """Despacha al método de ensamblado correcto según el formato."""
@@ -165,27 +171,47 @@ class Ensamblador:
         return (func7 << 25) | (rs2 << 20) | (rs1 << 15) | (riscv.FUNC3[mnem] << 12) | (rd << 7) | riscv.OPCODE['R']
 
     def _ensamblar_tipo_I(self, mnem: str, ops: List[str], pc: int) -> int:
-        if mnem in ["ecall", "ebreak", "fence"]:
+        if mnem in ["ecall", "ebreak"]:
             imm = 1 if mnem == "ebreak" else 0
             return (imm << 20) | (0 << 15) | (riscv.FUNC3[mnem] << 12) | (0 << 7) | riscv.OPCODE['SYSTEM']
 
         rd = self._analizar_registro(ops[0])
+
+        # ¿es un acceso de carga rd, imm(rs1) ?
         match_carga = re.match(r'(.+)\((.+)\)', ops[1])
-        if match_carga: # Formato lw, lb, etc. rd, imm(rs1)
+        if match_carga:  # Formato lw, lb, etc. rd, imm(rs1)
             inmediato_str, rs1_str = match_carga.groups()
             rs1 = self._analizar_registro(rs1_str)
-            opcode = riscv.OPCODE['L'] if mnem.startswith('l') else riscv.OPCODE['jalr']
-        else: # Formato addi, etc. rd, rs1, imm
-            rs1 = self._analizar_registro(ops[1])
-            inmediato_str = ops[2]
-            opcode = riscv.OPCODE['I']
-            if mnem == "jalr": opcode = riscv.OPCODE['jalr']
-        
+            opcode = riscv.OPCODE['L']
+            inmediato = self._resolver_simbolo_o_inmediato(inmediato_str, pc)
+            # Inmediato para loads es signed 12-bit
+            if not -2048 <= inmediato <= 2047:
+                raise ValueError(f"Inmediato '{inmediato}' fuera de rango para load (-2048 a 2047)")
+            return ((inmediato & 0xFFF) << 20) | (rs1 << 15) | (riscv.FUNC3[mnem] << 12) | (rd << 7) | opcode
+
+        # Formato rd, rs1, imm  (addi, xori, slti, jalr, shifts immediatos, ...)
+        rs1 = self._analizar_registro(ops[1])
+        inmediato_str = ops[2]
+        opcode = riscv.OPCODE['I']
+        if mnem == "jalr":
+            opcode = riscv.OPCODE['jalr']
+
+        # Si es shift inmediato (slli, srli, srai) -> shamt (0..31) y func7 en bits 31:25
+        if mnem in ("slli", "srli", "srai"):
+            shamt = self._resolver_simbolo_o_inmediato(inmediato_str, pc)
+            if not 0 <= shamt <= 31:
+                raise ValueError(f"Shamt '{shamt}' fuera de rango para '{mnem}' (0..31)")
+            func7 = riscv.FUNC7.get(mnem, 0)  # srai -> 0x20, srli/slli -> 0x00
+            # Encodificar: func7[31:25] | shamt[24:20] | rs1[19:15] | func3[14:12] | rd[11:7] | opcode[6:0]
+            return (func7 << 25) | ((shamt & 0x1F) << 20) | (rs1 << 15) | (riscv.FUNC3[mnem] << 12) | (rd << 7) | opcode
+
+        # resto de I-type normales (addi, xori, andi, slti, sltiu, etc.)
         inmediato = self._resolver_simbolo_o_inmediato(inmediato_str, pc)
         if not -2048 <= inmediato <= 2047:
             raise ValueError(f"Inmediato '{inmediato}' fuera de rango para instrucción tipo I (-2048 a 2047)")
-        
+
         return ((inmediato & 0xFFF) << 20) | (rs1 << 15) | (riscv.FUNC3[mnem] << 12) | (rd << 7) | opcode
+
 
     def _ensamblar_tipo_S(self, mnem: str, ops: List[str], pc: int) -> int:
         rs2_str, operando_memoria = ops
@@ -218,7 +244,9 @@ class Ensamblador:
         rd = self._analizar_registro(ops[0])
         inmediato = self._resolver_simbolo_o_inmediato(ops[1], pc)
         opcode = riscv.OPCODE['auipc'] if mnem == 'auipc' else riscv.OPCODE['U']
-        return (inmediato & 0xFFFFF000) | (rd << 7) | opcode
+        # El inmediato de 20 bits debe ir en los bits 31-12
+        return ((inmediato & 0xFFFFF) << 12) | (rd << 7) | opcode
+
 
     def _ensamblar_tipo_J(self, mnem: str, ops: List[str], pc: int) -> int:
         rd = self._analizar_registro(ops[0])
@@ -240,28 +268,39 @@ class Ensamblador:
         return riscv.REGISTROS[operando]
 
     def _resolver_simbolo_o_inmediato(self, simbolo: str, pc_actual: int, es_relativo: bool = False) -> int:
-        """Resuelve un operando que puede ser un símbolo, un inmediato, o una función hi/lo."""
+        """Resuelve un operando que puede ser un símbolo, un inmediato, o una función hi/lo.
+           Si es_relativo=True, devuelve (valor - pc_actual) cuando el operando es un literal
+           o cuando es una etiqueta conocida (ya lo hacías para etiquetas).
+        """
         simbolo = simbolo.strip()
-        
+
         # Manejo de %hi(simbolo) y %lo(simbolo)
         match_hi = re.match(r'%hi\((\w+)\)', simbolo)
         match_lo = re.match(r'%lo\((\w+)\)', simbolo)
-        
+
         etiqueta = simbolo
         if match_hi: etiqueta = match_hi.group(1)
         if match_lo: etiqueta = match_lo.group(1)
 
+        # Caso: etiqueta conocida en tabla de símbolos
         if etiqueta in self.tabla_de_simbolos:
             direccion_etiqueta = self.tabla_de_simbolos[etiqueta]
             desplazamiento = direccion_etiqueta - pc_actual if es_relativo else direccion_etiqueta
-            
+
             if match_hi:
                 return (desplazamiento + 0x800) >> 12
             if match_lo:
                 return desplazamiento & 0xFFF
             return desplazamiento
-        else:
-            try:
-                return int(simbolo, 0)
-            except ValueError:
-                raise ValueError(f"Símbolo no definido: '{simbolo}'")
+
+        # No es etiqueta conocida: intentar interpretar como número literal
+        try:
+            valor_literal = int(simbolo, 0)  # permite 0x.., 0o.., 0b.. y decimales
+            if es_relativo:
+                # Si piden relativo, devolvemos valor_literal - pc_actual
+                return valor_literal - pc_actual
+            else:
+                return valor_literal
+        except ValueError:
+            # No es literal ni etiqueta conocida -> error
+            raise ValueError(f"Símbolo no definido: '{simbolo}'")
