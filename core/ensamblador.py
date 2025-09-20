@@ -1,5 +1,3 @@
-# core/ensamblador.py
-# -*- coding: utf-8 -*-
 """
 Contiene la clase principal `Ensamblador` que implementa la lógica de ensamblado
 de dos pasadas.
