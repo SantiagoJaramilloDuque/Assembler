@@ -27,11 +27,11 @@ def principal() -> None:
     ensamblador = Ensamblador()
     
     # 2. Ejecutar el proceso de ensamblado.
-    codigo_maquina = ensamblador.ensamblar(lineas_codigo)
+    segmentos = ensamblador.ensamblar(lineas_codigo)
     
     # 3. Si el ensamblado fue exitoso, escribir los archivos de salida.
-    if codigo_maquina:
-        escribir_archivos_salida(codigo_maquina)
+    if segmentos:
+        escribir_archivos_salida(segmentos)
 
 if __name__ == "__main__":
     principal()

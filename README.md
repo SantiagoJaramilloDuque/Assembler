@@ -7,10 +7,11 @@ Un ensamblador de dos pasadas para la arquitectura **RV32I (RISC-V 32-bit Intege
 - **Ensamblado de dos pasadas** - Primera pasada para etiquetas, segunda para código máquina
 - **Soporte completo RV32I** - Todas las instrucciones base de RISC-V 32-bit Integer
 - **Pseudo-instrucciones** - Expansión automática de 19 pseudo-instrucciones comunes
+- **Directivas de segmento** - Soporte para `.text` y `.data` con enteros
 - **Manejo de errores** - Reportes detallados con formato visual usando Rich
-- **Múltiples formatos de salida** - Binario (.bin) y hexadecimal (.hex)
-- **Tabla de símbolos** - Soporte para etiquetas y referencias
-- **Tests unitarios** - Cobertura completa con 60+ tests
+- **Múltiples formatos de salida** - Binario (.bin) y hexadecimal (.hex) para cada segmento
+- **Tabla de símbolos** - Soporte para etiquetas y referencias entre segmentos
+- **Tests unitarios** - Cobertura completa con 70+ tests
 
 ## Estructura del Proyecto
 
@@ -20,6 +21,7 @@ Assembler/
 ├── program.asm              # Archivo de ejemplo
 ├── core/                    # Núcleo del ensamblador
 │   ├── ensamblador.py      # Clase principal Ensamblador
+│   ├── directivas.py       # Manejo de directivas .text y .data
 │   └── error_handler.py    # Manejo de errores
 ├── isa/                     # Definiciones de la arquitectura
 │   ├── riscv.py            # Constantes y formatos RISC-V
@@ -28,6 +30,7 @@ Assembler/
 │   └── file_writer.py      # Escritura de archivos de salida
 └── tests/                   # Tests unitarios
     ├── test_ensamblador.py
+    ├── test_directivas.py
     ├── test_error_handler.py
     ├── test_pseudo_instrucciones.py
     ├── test_riscv.py
@@ -62,12 +65,18 @@ cd Assembler
 python assembler.py input.asm
 ```
 
-### Ejemplo de archivo assembly (`program.asm`)
+### Ejemplo de archivo assembly con directivas
 
 ```assembly
-# Programa de ejemplo - suma de dos números
+# Programa de ejemplo con segmentos .data y .text
+.data
+    numero1: .word 42
+    numero2: .word 100
+    array: .word 1, 2, 3, 4, 5
+
 .text
 main:
+    # Cargar constantes inmediatas
     addi x1, x0, 10      # x1 = 10
     addi x2, x0, 20      # x2 = 20
     add x3, x1, x2       # x3 = x1 + x2 (30)
@@ -87,8 +96,71 @@ end:
 
 ### Archivos de salida generados
 
-- `program.bin` - Código máquina en formato binario
-- `program.hex` - Código máquina en formato hexadecimal
+Para el archivo `programa.asm`, se generan:
+
+- `programa.bin` - Segmento de texto en formato binario
+- `programa.hex` - Segmento de texto en formato hexadecimal
+- `programa_data.bin` - Segmento de datos en formato binario (si existe)
+- `programa_data.hex` - Segmento de datos en formato hexadecimal (si existe)
+
+## Directivas Soportadas
+
+### Directivas de Segmento
+
+| Directiva | Descripción                                              | Ejemplo |
+| --------- | -------------------------------------------------------- | ------- |
+| `.text`   | Cambia al segmento de código (dirección base 0x00000000) | `.text` |
+| `.data`   | Cambia al segmento de datos (dirección base 0x10000000)  | `.data` |
+
+### Directivas de Datos (solo en segmento .data)
+
+| Directiva | Descripción               | Ejemplo              |
+| --------- | ------------------------- | -------------------- |
+| `.word`   | Define enteros de 32 bits | `.word 42, 100, -50` |
+
+## Ejemplos de Uso
+
+### Programa Básico
+
+```assembly
+# Suma simple
+.text
+main:
+    addi x1, x0, 10
+    addi x2, x0, 20
+    add x3, x1, x2
+    ret
+```
+
+### Programa con Datos
+
+```assembly
+# Programa con segmento de datos
+.data
+    numeros: .word 1, 2, 3, 4, 5
+    constante: .word 42
+
+.text
+main:
+    li x1, 42          # Cargar constante
+    li x2, 100         # Otro valor
+    add x3, x1, x2     # Suma
+    ret
+```
+
+## Mejores Prácticas
+
+1. **Organización del código**: Siempre coloca el segmento `.data` antes del `.text`
+2. **Comentarios**: Usa comentarios descriptivos con `#`
+3. **Etiquetas**: Usa nombres descriptivos para etiquetas (`main:`, `loop:`, etc.)
+4. **Indentación**: Mantén indentación consistente para legibilidad
+5. **Valores inmediatos**: Los valores `.word` deben estar en el rango de 32 bits con signo
+
+## Limitaciones Actuales
+
+- **Referencias de datos**: No hay soporte directo para cargar datos del segmento `.data` en instrucciones
+- **Solo enteros**: El segmento `.data` solo soporta enteros de 32 bits (`.word`)
+- **Un archivo**: Procesa solo un archivo assembly a la vez
 
 ## Instrucciones Soportadas
 
@@ -127,6 +199,30 @@ end:
 ```bash
 python tests/run_all_tests.py
 ```
+
+### Ejecutar tests específicos
+
+```bash
+# Test del núcleo del ensamblador
+python -m unittest tests.test_ensamblador
+
+# Test de directivas .data y .text
+python -m unittest tests.test_directivas
+
+# Test de pseudo-instrucciones
+python -m unittest tests.test_pseudo_instrucciones
+
+# Test de manejo de errores
+python -m unittest tests.test_error_handler
+```
+
+### Cobertura de Tests
+
+- **Directivas**: Segmentos `.text` y `.data`, directiva `.word`
+- **Instrucciones**: Todas las instrucciones base RV32I
+- **Pseudo-instrucciones**: 19+ pseudo-instrucciones implementadas
+- **Manejo de errores**: Validación de sintaxis y operandos
+- **Archivos de salida**: Generación correcta de archivos .bin/.hex
 
 ### Ejecutar tests específicos
 

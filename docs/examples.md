@@ -1,10 +1,11 @@
 # Ejemplos de Uso
 
-Esta documentación proporciona ejemplos prácticos de cómo usar el ensamblador RISC-V, desde programas simples hasta casos más avanzados.
+Esta documentación proporciona ejemplos prácticos de cómo usar el ensamblador RISC-V, desde programas simples hasta casos más avanzados con directivas de segmento.
 
 ## Tabla de Contenidos
 
 - [Ejemplo Básico](#ejemplo-básico)
+- [Uso de Directivas .data y .text](#uso-de-directivas-data-y-text)
 - [Programa con Funciones](#programa-con-funciones)
 - [Uso de Pseudo-instrucciones](#uso-de-pseudo-instrucciones)
 - [Manejo de Datos](#manejo-de-datos)
@@ -67,6 +68,86 @@ python assembler.py suma_simple.asm
 2. `addi x2, x0, 20` → `01400113`: Carga 20 en registro x2
 3. `add x3, x1, x2` → `002081b3`: Suma x1 + x2, resultado en x3
 4. `nop` → `00000013`: No operación (pseudo-instrucción)
+
+## Uso de Directivas .data y .text
+
+### Programa con Datos y Código
+
+**Archivo: `programa_completo.asm`**
+
+```assembly
+# Programa que demuestra el uso de directivas
+.data
+    numero1: .word 42
+    numero2: .word 100
+    resultado: .word 0
+    array: .word 1, 2, 3, 4, 5
+
+.text
+main:
+    # Solo podemos usar valores inmediatos por ahora
+    # Las referencias a datos requieren funcionalidad adicional
+
+    # Trabajar con valores inmediatos basados en los datos
+    li x1, 42           # Simular carga de numero1
+    li x2, 100          # Simular carga de numero2
+
+    # Realizar operación
+    add x3, x1, x2      # x3 = numero1 + numero2
+
+    # Usar pseudo-instrucciones
+    li x4, 1000
+    mv x5, x3
+
+    # Salto condicional
+    beqz x3, fin
+    nop
+
+fin:
+    ret
+```
+
+**Ejecución:**
+
+```bash
+python assembler.py programa_completo.asm
+```
+
+**Archivos generados:**
+
+- `programa_completo.bin` - Código máquina del segmento .text
+- `programa_completo.hex` - Código máquina del segmento .text en hex
+- `programa_completo_data.bin` - Datos del segmento .data (si existe)
+- `programa_completo_data.hex` - Datos del segmento .data en hex (si existe)
+
+**Contenido de `programa_completo_data.hex`:**
+
+```
+0000002A
+00000064
+00000000
+00000001
+00000002
+00000003
+00000004
+00000005
+```
+
+### Solo Segmento de Datos
+
+**Archivo: `solo_datos.asm`**
+
+```assembly
+# Archivo que solo define datos
+.data
+    constantes: .word 10, 20, 30, 40, 50
+    valores: .word -1, -2, -3
+    grande: .word 0x12345678
+```
+
+**Archivos generados:**
+
+- Solo `solo_datos_data.bin` y `solo_datos_data.hex` (sin archivos de texto)
 
 ## Programa con Funciones
 

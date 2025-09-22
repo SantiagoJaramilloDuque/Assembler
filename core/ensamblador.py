@@ -6,6 +6,7 @@ import re
 from typing import List, Dict, Optional, Union
 
 from .error_handler import ErrorHandler
+from .directivas import ManejadorDirectivas
 from isa import riscv, pseudo_instrucciones
 
 class Ensamblador:
@@ -15,11 +16,12 @@ class Ensamblador:
     def __init__(self):
         self.tabla_de_simbolos: Dict[str, int] = {}
         self.manejador_errores = ErrorHandler()
+        self.manejador_directivas = ManejadorDirectivas()
         self.segmento_texto: bytearray = bytearray()
         self.direccion_actual: int = 0
         self.segmento_actual: str = ".text"
 
-    def ensamblar(self, lineas_codigo: List[str]) -> Optional[bytearray]:
+    def ensamblar(self, lineas_codigo: List[str]) -> Optional[Dict[str, bytearray]]:
         """
         Orquesta el proceso completo de ensamblado.
         
@@ -27,8 +29,8 @@ class Ensamblador:
             lineas_codigo: Una lista de strings, donde cada string es una línea de código.
         
         Returns:
-            Un bytearray con el código máquina si el ensamblado es exitoso,
-            o None si ocurren errores.
+            Un diccionario con los segmentos de código máquina si el ensamblado es exitoso,
+            o None si ocurren errores. Las claves son 'text' y 'data'.
         """
         self._primera_pasada(lineas_codigo)
         if not self.manejador_errores.tiene_errores():
@@ -36,39 +38,53 @@ class Ensamblador:
         
         self.manejador_errores.resumen_final()
         
-        return self.segmento_texto if not self.manejador_errores.tiene_errores() else None
+        if not self.manejador_errores.tiene_errores():
+            return {
+                'text': self.manejador_directivas.obtener_segmento_texto(),
+                'data': self.manejador_directivas.obtener_segmento_datos()
+            }
+        return None
 
     def _primera_pasada(self, lineas_codigo: List[str]) -> None:
         """Construye la tabla de símbolos recorriendo el código."""
         print("Realizando primera pasada (construcción de tabla de símbolos)...")
-        self.direccion_actual = 0
-        self.segmento_actual = ".text"
+        self.manejador_directivas.resetear()
 
         for num_linea, linea_original in enumerate(lineas_codigo, 1):
             linea = linea_original.split('#')[0].strip()
             if not linea:
                 continue
 
-            if linea.startswith('.text'):
-                self.segmento_actual = ".text"
-                self.direccion_actual = 0
-                continue
-            elif linea.startswith('.data'):
-                # Este ensamblador no maneja datos, pero reconoce la directiva.
-                self.segmento_actual = ".data"
-                self.direccion_actual = 0x10000000 
+            # Verificar si es una directiva
+            if self.manejador_directivas.es_directiva(linea):
+                error = self.manejador_directivas.procesar_directiva(linea, num_linea)
+                if error:
+                    self.manejador_errores.reportar(num_linea, error, linea_original)
                 continue
 
+            # Procesar etiquetas
             match_etiqueta = re.match(r'(\w+):', linea)
             if match_etiqueta:
                 simbolo = match_etiqueta.group(1)
+                direccion_actual = self.manejador_directivas.obtener_direccion_actual()
+                
                 if simbolo in self.tabla_de_simbolos:
-                    # Error: Símbolo redefinido (no implementado en primera pasada para simplicidad)
-                    pass
-                self.tabla_de_simbolos[simbolo] = self.direccion_actual
+                    self.manejador_errores.reportar(num_linea, 
+                        f"Símbolo '{simbolo}' ya está definido", linea_original)
+                else:
+                    self.tabla_de_simbolos[simbolo] = direccion_actual
+                    self.manejador_directivas.agregar_simbolo(simbolo, direccion_actual)
+                
                 linea = linea[len(match_etiqueta.group(0)):].strip()
 
-            if not linea or self.segmento_actual != ".text":
+            # Solo procesar instrucciones en el segmento de texto
+            if not linea or not self.manejador_directivas.esta_en_segmento_texto():
+                continue
+
+            # Validar sintaxis general de la línea
+            error_sintaxis = self._validar_sintaxis_general(linea, num_linea)
+            if error_sintaxis:
+                self.manejador_errores.reportar(num_linea, error_sintaxis, linea_original)
                 continue
 
             partes = linea.split(maxsplit=1)
@@ -77,31 +93,43 @@ class Ensamblador:
             
             try:
                 inst_expandidas = pseudo_instrucciones.expandir(mnemonico, operandos)
-                self.direccion_actual += len(inst_expandidas) * 4
+                self.manejador_directivas.incrementar_direccion(len(inst_expandidas) * 4)
             except ValueError as e:
                 self.manejador_errores.reportar(num_linea, str(e), linea_original)
 
     def _segunda_pasada(self, lineas_codigo: List[str]) -> None:
         """Genera el código máquina usando la tabla de símbolos."""
         print("Realizando segunda pasada (generación de código máquina)...")
-        self.direccion_actual = 0
-        self.segmento_actual = ".text"
+        self.manejador_directivas.resetear()
+        
+        # Integrar todos los símbolos encontrados en la primera pasada
+        self.tabla_de_simbolos.update(self.manejador_directivas.obtener_todos_los_simbolos())
 
         for num_linea, linea_original in enumerate(lineas_codigo, 1):
             linea = linea_original.split('#')[0].strip()
             if not linea:
                 continue
 
-            if linea.startswith('.'):
-                self.segmento_actual = ".text" if linea.startswith('.text') else ".data"
-                self.direccion_actual = 0 if self.segmento_actual == ".text" else 0x10000000
+            # Procesar directivas
+            if self.manejador_directivas.es_directiva(linea):
+                error = self.manejador_directivas.procesar_directiva(linea, num_linea)
+                if error:
+                    self.manejador_errores.reportar(num_linea, error, linea_original)
                 continue
 
+            # Procesar etiquetas
             match_etiqueta = re.match(r'(\w+):', linea)
             if match_etiqueta:
                 linea = linea[len(match_etiqueta.group(0)):].strip()
 
-            if not linea or self.segmento_actual != ".text":
+            # Solo procesar instrucciones en el segmento de texto
+            if not linea or not self.manejador_directivas.esta_en_segmento_texto():
+                continue
+
+            # Validar sintaxis general de la línea
+            error_sintaxis = self._validar_sintaxis_general(linea, num_linea)
+            if error_sintaxis:
+                self.manejador_errores.reportar(num_linea, error_sintaxis, linea_original)
                 continue
 
             partes = linea.split(maxsplit=1)
@@ -116,12 +144,135 @@ class Ensamblador:
 
                 for mnem, ops in inst_expandidas:
                     self._validar_operandos(mnem, ops) # Validación mejorada
-                    codigo_maquina = self._ensamblar_instruccion(mnem, ops, self.direccion_actual)
-                    self.segmento_texto.extend(codigo_maquina)
-                    self.direccion_actual += 4
+                    direccion_actual = self.manejador_directivas.obtener_direccion_actual()
+                    codigo_maquina = self._ensamblar_instruccion(mnem, ops, direccion_actual)
+                    self.manejador_directivas.obtener_segmento_texto().extend(codigo_maquina)
+                    self.manejador_directivas.incrementar_direccion(4)
 
             except ValueError as e:
                 self.manejador_errores.reportar(num_linea, str(e), linea_original)
+
+    def _validar_sintaxis_general(self, linea: str, num_linea: int) -> Optional[str]:
+        """
+        Valida la sintaxis general de una línea de assembly.
+        
+        Args:
+            linea: La línea de código assembly sin comentarios ni espacios iniciales/finales.
+            num_linea: Número de línea para contexto de errores.
+            
+        Returns:
+            None si la sintaxis es válida, mensaje de error si hay problemas.
+        """
+        # 1. Verificar caracteres válidos (letras, números, espacios, comas, paréntesis, guiones, %, puntos, @)
+        caracteres_validos = re.compile(r'^[a-zA-Z0-9\s,()._\-+%:x@]+$')
+        if not caracteres_validos.match(linea):
+            caracteres_invalidos = ''.join(set(c for c in linea if not re.match(r'[a-zA-Z0-9\s,()._\-+%:x@]', c)))
+            return f"Caracteres inválidos en la línea: '{caracteres_invalidos}'"
+        
+        # 2. Verificar que no haya espacios excesivos o múltiples comas consecutivas
+        if '  ' in linea:  # Múltiples espacios consecutivos
+            return "Múltiples espacios consecutivos no están permitidos"
+        
+        if ',,' in linea:  # Múltiples comas consecutivas
+            return "Múltiples comas consecutivas no están permitidas"
+        
+        # 3. Validar formato básico de instrucción
+        partes = linea.split(maxsplit=1)
+        if not partes:
+            return None  # Línea vacía, ya manejada antes
+        
+        mnemonico = partes[0].lower()
+        
+        # 4. Verificar que el mnemónico solo contenga caracteres alfanuméricos
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9]*$', mnemonico):
+            return f"Mnemónico inválido: '{mnemonico}' - debe comenzar con letra y contener solo letras y números"
+        
+        # 5. Si hay operandos, validar su formato básico
+        if len(partes) > 1:
+            operandos_str = partes[1]
+            
+            # Verificar que no termine o empiece con coma
+            if operandos_str.startswith(',') or operandos_str.endswith(','):
+                return "Los operandos no pueden empezar o terminar con coma"
+            
+            # Verificar que los paréntesis estén balanceados
+            if operandos_str.count('(') != operandos_str.count(')'):
+                return "Paréntesis no balanceados en los operandos"
+            
+            # Validar cada operando individualmente
+            operandos = [op.strip() for op in operandos_str.split(',')]
+            for i, operando in enumerate(operandos):
+                if not operando:  # Operando vacío
+                    return f"Operando {i+1} está vacío"
+                
+                error_operando = self._validar_sintaxis_operando(operando)
+                if error_operando:
+                    return f"Operando {i+1} '{operando}': {error_operando}"
+        
+        return None
+
+    def _validar_sintaxis_operando(self, operando: str) -> Optional[str]:
+        """
+        Valida la sintaxis de un operando individual.
+        
+        Args:
+            operando: El operando a validar (ya sin espacios iniciales/finales).
+            
+        Returns:
+            None si es válido, mensaje de error si hay problemas.
+        """
+        if not operando:
+            return "Operando vacío"
+        
+        # 1. Funciones %hi y %lo (verificar primero antes que otros patrones)
+        if re.match(r'^%hi\([a-zA-Z_][a-zA-Z0-9_]*\)$', operando) or \
+           re.match(r'^%lo\([a-zA-Z_][a-zA-Z0-9_]*\)$', operando):
+            return None
+        
+        # 2. Registro simple (x0-x31, nombres como sp, ra, etc.)
+        if re.match(r'^x\d+$', operando.lower()):
+            try:
+                num_reg = int(operando[1:])
+                if num_reg > 31:
+                    return f"número de registro fuera de rango (0-31)"
+            except ValueError:
+                return "formato de registro inválido"
+            return None
+        
+        if operando.lower() in riscv.REGISTROS:
+            return None
+        
+        # 3. Inmediato decimal, hexadecimal, octal o binario
+        if re.match(r'^-?\d+$', operando) or \
+           re.match(r'^-?0x[0-9a-fA-F]+$', operando) or \
+           re.match(r'^-?0o[0-7]+$', operando) or \
+           re.match(r'^-?0b[01]+$', operando):
+            return None
+        
+        # 4. Acceso a memoria: inmediato(registro) o etiqueta(registro)
+        memoria_match = re.match(r'^(.+)\((.+)\)$', operando)
+        if memoria_match:
+            offset, registro = memoria_match.groups()
+            
+            # Validar el registro dentro de los paréntesis
+            error_reg = self._validar_sintaxis_operando(registro)
+            if error_reg and registro.lower() not in riscv.REGISTROS:
+                return f"registro en paréntesis inválido: {error_reg}"
+            
+            # Validar el offset (puede ser inmediato o etiqueta)
+            if not (re.match(r'^-?\d+$', offset) or 
+                   re.match(r'^-?0x[0-9a-fA-F]+$', offset) or
+                   re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', offset)):
+                return "offset debe ser un número o una etiqueta válida"
+            
+            return None
+        
+        # 5. Etiqueta simple
+        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', operando):
+            return None
+        
+        # Si llegamos aquí, el operando no coincide con ningún patrón válido
+        return "formato no reconocido"
 
     def _validar_operandos(self, mnem: str, ops: List[str]) -> None:
         """Validación más robusta del número y tipo de operandos."""

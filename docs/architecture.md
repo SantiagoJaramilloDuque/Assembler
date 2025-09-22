@@ -31,20 +31,20 @@ def main():
     1. Lee archivo .asm de entrada
     2. Instancia Ensamblador()
     3. Llama ensamblador.ensamblar(lineas)
-    4. Escribe archivos de salida (.bin, .hex)
+    4. Escribe archivos de salida para cada segmento
 ```
 
 **Interacciones**:
 
 - Lee archivo de entrada del sistema de archivos
 - Usa `core.ensamblador.Ensamblador` para procesar
-- Usa `utils.file_writer` para generar salidas
+- Usa `utils.file_writer` para generar salidas de múltiples segmentos
 
 ---
 
 ### 2. **core/ensamblador.py** - Núcleo del Ensamblador
 
-**Responsabilidad**: Implementa la lógica principal del ensamblado de dos pasadas.
+**Responsabilidad**: Implementa la lógica principal del ensamblado de dos pasadas con soporte para múltiples segmentos.
 
 #### Clase `Ensamblador`
 
@@ -53,6 +53,7 @@ class Ensamblador:
     def __init__(self):
         self.tabla_de_simbolos: Dict[str, int] = {}
         self.manejador_errores = ErrorHandler()
+        self.manejador_directivas = ManejadorDirectivas()
         self.segmento_texto: bytearray = bytearray()
         self.direccion_actual: int = 0
 ```
@@ -60,16 +61,18 @@ class Ensamblador:
 #### Flujo de Trabajo
 
 ```
-ensamblar(lineas_codigo)
+ensamblar(lineas_codigo) -> Dict[str, bytearray]
 ├── _primera_pasada(lineas_codigo)
-│   ├── Analizar etiquetas
-│   ├── Calcular direcciones
+│   ├── Procesar directivas (.text, .data)
+│   ├── Analizar etiquetas por segmento
+│   ├── Calcular direcciones por segmento
 │   └── Construir tabla_de_simbolos
 ├── _segunda_pasada(lineas_codigo)
+│   ├── Procesar directivas y datos
 │   ├── Expandir pseudo-instrucciones
 │   ├── Validar operandos
 │   ├── Generar código máquina
-│   └── Llenar segmento_texto
+│   └── Llenar segmentos (texto y datos)
 └── resumen_final()
 ```
 
@@ -87,10 +90,40 @@ ensamblar(lineas_codigo)
 - Usa `isa.riscv` para definiciones de la arquitectura
 - Usa `isa.pseudo_instrucciones` para expansión
 - Usa `core.error_handler` para reportar errores
+- Usa `core.directivas` para manejo de segmentos
 
 ---
 
-### 3. **core/error_handler.py** - Manejo de Errores
+### 3. **core/directivas.py** - Manejo de Directivas
+
+**Responsabilidad**: Gestiona las directivas de segmento (.text, .data) y datos (.word).
+
+#### Clase `ManejadorDirectivas`
+
+```python
+class ManejadorDirectivas:
+    def __init__(self):
+        self.direcciones_base = {
+            TipoSegmento.TEXT: 0x00000000,
+            TipoSegmento.DATA: 0x10000000
+        }
+        self.segmento_actual = TipoSegmento.TEXT
+        self.segmentos = {
+            TipoSegmento.TEXT: bytearray(),
+            TipoSegmento.DATA: bytearray()
+        }
+```
+
+**Funcionalidades**:
+
+- Detección de directivas (`.text`, `.data`, `.word`)
+- Cambio entre segmentos con direcciones base correctas
+- Procesamiento de datos enteros de 32 bits
+- Gestión de símbolos por segmento
+
+---
+
+### 4. **core/error_handler.py** - Manejo de Errores
 
 **Responsabilidad**: Gestiona la recolección y visualización de errores.
 
@@ -199,17 +232,24 @@ PSEUDO_INSTRUCCIONES = {
 
 ### 6. **utils/file_writer.py** - Escritura de Archivos
 
-**Responsabilidad**: Genera archivos de salida en diferentes formatos.
+**Responsabilidad**: Genera archivos de salida en diferentes formatos para múltiples segmentos.
 
 #### Funciones
 
 ```python
-def escribir_binario(codigo_maquina: bytearray, archivo: str):
-    # Escribe archivo .bin
+def escribir_archivos_salida(segmentos: Dict[str, bytearray]):
+    # Escribe archivos .bin y .hex para cada segmento
+    # - programa.bin/hex para segmento de texto
+    # - programa_data.bin/hex para segmento de datos
 
-def escribir_hexadecimal(codigo_maquina: bytearray, archivo: str):
-    # Escribe archivo .hex formateado
+def _escribir_segmento(segmento: bytearray, archivo_hex: str, archivo_bin: str):
+    # Función auxiliar para escribir un segmento específico
 ```
+
+**Archivos generados**:
+
+- Segmento de texto: `nombre.bin`, `nombre.hex`
+- Segmento de datos: `nombre_data.bin`, `nombre_data.hex` (si existe)
 
 ---
 
@@ -222,6 +262,7 @@ def escribir_hexadecimal(codigo_maquina: bytearray, archivo: str):
 ```
 tests/
 ├── test_ensamblador.py         # Tests del núcleo
+├── test_directivas.py          # Tests de directivas .text/.data
 ├── test_error_handler.py       # Tests de manejo de errores
 ├── test_pseudo_instrucciones.py # Tests de expansión
 ├── test_riscv.py              # Tests de definiciones ISA
@@ -239,19 +280,45 @@ archivo.asm → assembler.py → List[str] (líneas)
 ### 2. Primera Pasada
 
 ```
-List[str] → Ensamblador._primera_pasada() → tabla_de_simbolos
+List[str] → Ensamblador._primera_pasada() → {
+    tabla_de_simbolos,
+    directivas procesadas,
+    segmentos inicializados
+}
 ```
 
 ### 3. Segunda Pasada
 
 ```
-List[str] + tabla_de_simbolos → _segunda_pasada() → bytearray (código máquina)
+List[str] + tabla_de_simbolos → _segunda_pasada() → {
+    segmento_texto: bytearray,
+    segmento_datos: bytearray
+}
 ```
 
 ### 4. Salida
 
 ```
-bytearray → file_writer → {archivo.bin, archivo.hex}
+Dict[str, bytearray] → file_writer → {
+    archivo.bin, archivo.hex,           # segmento texto
+    archivo_data.bin, archivo_data.hex  # segmento datos (si existe)
+}
+```
+
+## Manejo de Segmentos
+
+### Direcciones Base
+
+```python
+SEGMENTO_TEXT = 0x00000000  # Código ejecutable
+SEGMENTO_DATA = 0x10000000  # Datos inicializados
+```
+
+### Flujo de Procesamiento
+
+```
+.text → Instrucciones RISC-V → Código máquina (32-bit)
+.data → Directivas .word    → Datos enteros (32-bit)
 ```
 
 ## Patrones de Diseño Utilizados
