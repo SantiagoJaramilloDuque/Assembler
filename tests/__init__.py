@@ -1,5 +1,3 @@
-# tests/__init__.py
-# -*- coding: utf-8 -*-
 """
 Paquete de tests unitarios para el ensamblador RISC-V.
 

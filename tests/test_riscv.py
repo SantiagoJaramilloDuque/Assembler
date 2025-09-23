@@ -1,5 +1,3 @@
-# tests/test_riscv.py
-# -*- coding: utf-8 -*-
 """
 Tests unitarios para el módulo riscv.
 """

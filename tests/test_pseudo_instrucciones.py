@@ -1,5 +1,3 @@
-# tests/test_pseudo_instrucciones.py
-# -*- coding: utf-8 -*-
 """
 Tests unitarios para el módulo pseudo_instrucciones.
 """

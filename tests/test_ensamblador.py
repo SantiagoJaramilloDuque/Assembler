@@ -1,5 +1,3 @@
-# tests/test_ensamblador.py
-# -*- coding: utf-8 -*-
 """
 Tests unitarios para la clase Ensamblador.
 """

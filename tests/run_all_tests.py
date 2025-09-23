@@ -1,5 +1,3 @@
-# tests/run_all_tests.py
-# -*- coding: utf-8 -*-
 """
 Script para ejecutar todos los tests unitarios del proyecto.
 """
