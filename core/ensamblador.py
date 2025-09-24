@@ -3,7 +3,7 @@ Contiene la clase principal `Ensamblador` que implementa la lógica de ensamblad
 de dos pasadas.
 """
 import re
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional
 
 from .error_handler import ErrorHandler
 from .directivas import ManejadorDirectivas
@@ -20,7 +20,7 @@ class Ensamblador:
         self.segmento_texto: bytearray = bytearray()
         self.direccion_actual: int = 0
         self.segmento_actual: str = ".text"
-
+    
     def ensamblar(self, lineas_codigo: List[str]) -> Optional[Dict[str, bytearray]]:
         """
         Orquesta el proceso completo de ensamblado.

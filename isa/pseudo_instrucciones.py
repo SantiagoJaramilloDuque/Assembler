@@ -134,5 +134,5 @@ def expandir(mnemonico: str, operandos: List[str]) -> List[Tuple[str, List[str]]
             return [('auipc', [rd, f'%hi({inmediato_str})']),
                     ('addi', [rd, rd, f'%lo({inmediato_str})'])]
 
-    # Si no se expandió nada (debería ser imposible si está en la lista)
+    # Si no se expandió nada 
     return [(mnemonico, operandos)]

@@ -16,9 +16,11 @@ FORMATOS_INSTRUCCION: Dict[str, List[str]] = {
     'J': ["jal"]
 }
 
-# Diccionario invertido para buscar el formato de un mnemónico de forma eficiente (O(1)).
+# Diccionario invertido para buscar el formato de un mnemónico de forma eficiente.
 MNEMONICO_A_FORMATO: Dict[str, str] = {
-    mnem: fmt for fmt, lista_mnem in FORMATOS_INSTRUCCION.items() for mnem in lista_mnem
+    mnem: fmt 
+    for fmt, lista_mnem in FORMATOS_INSTRUCCION.items() 
+    for mnem in lista_mnem
 }
 
 # Códigos de operación (opcodes) para cada formato.
@@ -48,15 +50,16 @@ FUNC3: Dict[str, int] = {
     "jalr": 0b000, "ecall": 0b000, "ebreak": 0b000
 }
 
-# Códigos de función de 7 bits (func7). Solo los que no son cero.
+# Códigos de función de 7 bits (func7).
 FUNC7: Dict[str, int] = {
     "sub": 0b0100000,
     "sra": 0b0100000,
     "srai": 0b0100000
 }
 
-# Mapeo de nombres de registros (ABI) a sus números.
+# Mapeo de nombres de registros a sus números.
 REGISTROS: Dict[str, int] = {f'x{i}': i for i in range(32)}
+
 REGISTROS.update({
     'zero': 0, 'ra': 1, 'sp': 2, 'gp': 3, 'tp': 4, 't0': 5, 't1': 6, 't2': 7,
     's0': 8, 'fp': 8, 's1': 9, 'a0': 10, 'a1': 11, 'a2': 12, 'a3': 13, 'a4': 14,

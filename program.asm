@@ -1,2 +1,1 @@
-# Pseudo: ret -> jalr x0, ra, 0
-    ret
+addi x1, x2, 10
