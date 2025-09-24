@@ -59,7 +59,9 @@ class ManejadorDirectivas:
         linea = linea.strip()
         return (linea.startswith('.text') or 
                 linea.startswith('.data') or
-                linea.startswith('.word'))
+                linea.startswith('.word') or
+                linea.startswith('.half') or
+                linea.startswith('.bin'))
 
     def procesar_directiva(self, linea: str, num_linea: int) -> Optional[str]:
         """
@@ -85,6 +87,16 @@ class ManejadorDirectivas:
             if self.segmento_actual != TipoSegmento.DATA:
                 return "Directiva .word solo válida en segmento .data"
             return self._procesar_word(linea)
+        elif linea.startswith('.half'):
+            # Solo permitir .half en segmento .data
+            if self.segmento_actual != TipoSegmento.DATA:
+                return "Directiva .half solo válida en segmento .data"
+            return self._procesar_half(linea)
+        elif linea.startswith('.bin'):
+            # Solo permitir .bin en segmento .data
+            if self.segmento_actual != TipoSegmento.DATA:
+                return "Directiva .bin solo válida en segmento .data"
+            return self._procesar_bin(linea)
         
         return f"Directiva no reconocida: {linea}"
 
@@ -149,6 +161,87 @@ class ManejadorDirectivas:
                 
             except ValueError:
                 return f"Valor inválido para .word: '{valor}'"
+        
+        return None
+
+    def _procesar_half(self, linea: str) -> Optional[str]:
+        """
+        Procesa directiva .half (16 bits enteros únicamente).
+        
+        Args:
+            linea: La línea que contiene la directiva .half.
+            
+        Returns:
+            None si se procesó correctamente, mensaje de error en caso contrario.
+        """
+        partes = linea.split(maxsplit=1)
+        if len(partes) < 2:
+            return "Directiva .half requiere al menos un valor"
+        
+        argumentos = partes[1]
+        valores = [arg.strip() for arg in argumentos.split(',')]
+        
+        for valor in valores:
+            try:
+                # Solo aceptar enteros (sin decimales)
+                if '.' in valor:
+                    return f"Solo se permiten enteros en .half, encontrado: '{valor}'"
+                
+                num = int(valor, 0)  # Permite diferentes bases (hex, oct, bin)
+                
+                # Verificar rango de 16 bits con signo
+                if not (-32768 <= num <= 32767):
+                    return f"Valor fuera de rango para .half (16 bits): {valor}"
+                
+                # Convertir a bytes en little-endian
+                bytes_valor = num.to_bytes(2, byteorder='little', signed=True)
+                self.segmentos[TipoSegmento.DATA].extend(bytes_valor)
+                self.direcciones_actuales[TipoSegmento.DATA] += 2
+                
+            except ValueError:
+                return f"Valor inválido para .half: '{valor}'"
+        
+        return None
+
+    def _procesar_bin(self, linea: str) -> Optional[str]:
+        """
+        Procesa directiva .bin (datos binarios como cadenas de 0s y 1s).
+        
+        Args:
+            linea: La línea que contiene la directiva .bin.
+            
+        Returns:
+            None si se procesó correctamente, mensaje de error en caso contrario.
+        """
+        partes = linea.split(maxsplit=1)
+        if len(partes) < 2:
+            return "Directiva .bin requiere al menos un valor"
+        
+        argumentos = partes[1].strip()
+        
+        # Remover comillas si están presentes
+        if (argumentos.startswith('"') and argumentos.endswith('"')) or \
+           (argumentos.startswith("'") and argumentos.endswith("'")):
+            argumentos = argumentos[1:-1]
+        
+        # Validar que solo contenga 0s y 1s
+        if not all(c in '01' for c in argumentos):
+            return "Directiva .bin solo acepta cadenas de 0s y 1s"
+        
+        # La cadena debe ser múltiplo de 8 bits
+        if len(argumentos) % 8 != 0:
+            return f"Directiva .bin requiere múltiplos de 8 bits, encontrado: {len(argumentos)} bits"
+        
+        # Procesar en grupos de 8 bits
+        for i in range(0, len(argumentos), 8):
+            byte_str = argumentos[i:i+8]
+            try:
+                # Convertir cadena binaria a byte
+                byte_valor = int(byte_str, 2)
+                self.segmentos[TipoSegmento.DATA].extend([byte_valor])
+                self.direcciones_actuales[TipoSegmento.DATA] += 1
+            except ValueError:
+                return f"Error procesando byte binario: '{byte_str}'"
         
         return None
 
